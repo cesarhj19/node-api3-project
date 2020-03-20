@@ -39,7 +39,11 @@ router.get('/:id/posts', validateUserId, (req, res) => {
 	userDb
 		.getUserPosts(id)
 		.then(userPosts => {
-			res.status(200).json(userPosts);
+			if (userPosts.length !== 0) {
+				res.status(200).json(userPosts);
+			} else {
+				res.status(404).json({ message: 'There are no posts from this user id' });
+			}
 		})
 		.catch(err => {
 			res.status(500).json({
@@ -55,11 +59,11 @@ router.delete('/:id', validateUserId, (req, res) => {
 	userDb
 		.remove(id)
 		.then(deletedUser => {
-			res.status(204).json(userRemoved);
+			res.status(204).json({ message: 'User has been removed' });
 		})
 		.catch(err => {
 			res.status(500).json({
-				error: `There was an error while removing user from the database`
+				error: `There was an error while removing the user from the database`
 			});
 		});
 });
@@ -68,16 +72,21 @@ router.put('/:id', validateUserId, (req, res) => {
 	// do your magic!
 	const { id } = req.user;
 	const newUserInfo = req.body;
-	userDb
-		.update(id, newUserInfo)
-		.then(updatedUser => {
-			res.status(200).json({ newUserInfo });
-		})
-		.catch(err => {
-			res.status(500).json({
-				error: `There was an error while updating user from the database`
+	if (typeof newUserInfo.name === 'undefined') {
+		res.status(400).json({ message: 'Missing text field' });
+	} else {
+		req.newUserInfo = { id: req.user.id, ...newUserInfo };
+		userDb
+			.update(id, newUserInfo)
+			.then(updatedUser => {
+				res.status(200).json(req.newUserInfo);
+			})
+			.catch(err => {
+				res.status(500).json({
+					error: `There was an error while updating user from the database`
+				});
 			});
-		});
+	}
 });
 
 //custom middleware
