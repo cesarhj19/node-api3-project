@@ -1,158 +1,91 @@
 const express = require('express');
 const userDb = require('./userDb');
 const postDb = require('../posts/postDb');
+const { validateUserId, validateUser, validatePost } = require('../middleware');
 
 const router = express.Router();
 
-router.post('/', validateUser, (req, res) => {
-	// do your magic!
-	res.status(201).json(req.newUser);
+router.post('/', validateUser, async (req, res) => {
+  try {
+    userDb.insert(req.user)
+      .then(() => res.status(201).json(req.user));
+  } catch (err) {
+    res.status(500)
+      .json({
+        error: 'There was an error while saving the user to the database',
+        message: err.message,
+      });
+  }
 });
 
-router.post('/:id/posts', validateUserId, validatePost, (req, res) => {
-	// do your magic!
-	res.status(201).json(req.newPost);
+router.post('/:id/posts', validateUserId, validatePost, async (req, res) => {
+  try {
+    const newPost = { user_id: req.user.id, text: req.post.text };
+    postDb.insert(newPost)
+      .then(() => res.status(201).json(req.post));
+  } catch (err) {
+    res.status(500)
+      .json({
+        error: 'There was an error while saving the post to the database',
+        message: err.message,
+      });
+  }
 });
 
-router.get('/', (req, res) => {
-	// do your magic!
-	userDb
-		.get()
-		.then(users => {
-			res.status(200).json({ users });
-		})
-		.catch(err => {
-			res.status(500).json({
-				error: 'There was an error while retrieving the users from the database'
-			});
-		});
+router.get('/', async (req, res) => {
+  try {
+    userDb.get()
+      .then((users) => res.status(200).json({ users }));
+  } catch (err) {
+    res.status(500).json({
+      error: 'There was an error while retrieving the users from the database',
+      message: err.message,
+    });
+  }
 });
 
 router.get('/:id', validateUserId, (req, res) => {
-	// do your magic!
-	res.status(200).json(req.user);
+  res.status(200).json(req.user);
 });
 
-router.get('/:id/posts', validateUserId, (req, res) => {
-	// do your magic!
-	const { id } = req.user;
-	userDb
-		.getUserPosts(id)
-		.then(userPosts => {
-			if (userPosts.length !== 0) {
-				res.status(200).json(userPosts);
-			} else {
-				res.status(404).json({ message: 'There are no posts from this user id' });
-			}
-		})
-		.catch(err => {
-			res.status(500).json({
-				error: `There was an error while retrieving the user's posts from the database`
-			});
-		});
+router.get('/:id/posts', validateUserId, async (req, res) => {
+  try {
+    userDb.getUserPosts(req.user.id)
+      .then((userPosts) => {
+        if (userPosts.length !== 0) res.status(200).json(userPosts);
+        else res.status(404).json({ message: 'There are no posts from this user id' });
+      });
+  } catch (err) {
+    res.status(500).json({
+      error: 'There was an error while retrieving the user\'s posts from the database',
+      message: err.message,
+    });
+  }
 });
 
-router.delete('/:id', validateUserId, (req, res) => {
-	// do your magic!
-	const { id } = req.user;
-	const userRemoved = req.user;
-	userDb
-		.remove(id)
-		.then(deletedUser => {
-			res.status(204).json({ message: 'User has been removed' });
-		})
-		.catch(err => {
-			res.status(500).json({
-				error: `There was an error while removing the user from the database`
-			});
-		});
+router.delete('/:id', validateUserId, async (req, res) => {
+  try {
+    userDb.remove(req.user.id)
+      .then(() => res.status(204).json({ message: 'User has been removed' }));
+  } catch (err) {
+    res.status(500).json({
+      error: 'There was an error while removing the user from the database',
+      message: err.message,
+    });
+  }
 });
 
-router.put('/:id', validateUserId, (req, res) => {
-	// do your magic!
-	const { id } = req.user;
-	const newUserInfo = req.body;
-	if (typeof newUserInfo.name === 'undefined') {
-		res.status(400).json({ message: 'Missing text field' });
-	} else {
-		req.newUserInfo = { id: req.user.id, ...newUserInfo };
-		userDb
-			.update(id, newUserInfo)
-			.then(updatedUser => {
-				res.status(200).json(req.newUserInfo);
-			})
-			.catch(err => {
-				res.status(500).json({
-					error: `There was an error while updating user from the database`
-				});
-			});
-	}
+router.put('/:id', validateUserId, validateUser, async (req, res) => {
+  try {
+    userDb.update(req.user.id, req.user)
+      .then(() => res.status(200).json(req.user));
+  } catch (err) {
+    res.status(500).json({
+      error: 'There was an error while updating user from the database',
+      message: err.message,
+    });
+  }
 });
 
-//custom middleware
-
-function validateUserId(req, res, next) {
-	// do your magic!
-	const { id } = req.params;
-	userDb
-		.getById(id)
-		.then(user => {
-			if (user) {
-				req.user = user;
-				next();
-			} else {
-				res.status(404).json({ message: 'invalid user id' });
-			}
-		})
-		.catch(err => {
-			res
-				.status(500)
-				.json({ error: 'There was an error while saving the post to the database' });
-		});
-}
-
-function validateUser(req, res, next) {
-	// do your magic!
-	const newUser = req.body;
-	if (typeof newUser === 'undefined') {
-		res.status(400).json({ message: 'missing user data' });
-	} else if (typeof newUser.name === 'undefined') {
-		res.status(400).json({ message: 'missing required name field' });
-	} else {
-		req.newUser = newUser;
-		userDb
-			.insert(req.newUser)
-			.then(addedUser => {
-				next();
-			})
-			.catch(err => {
-				res
-					.status(500)
-					.json({ error: 'There was an error while saving the user to the database' });
-			});
-	}
-}
-
-function validatePost(req, res, next) {
-	// do your magic!
-	const newPost = req.body;
-	if (typeof newPost === 'undefined') {
-		res.status(400).json({ message: 'missing post data' });
-	} else if (typeof newPost.text === 'undefined') {
-		res.status(400).json({ message: 'missing required text field' });
-	} else {
-		req.newPost = { ...newPost, user_id: req.user.id };
-		postDb
-			.insert(req.newPost)
-			.then(addedPost => {
-				next();
-			})
-			.catch(err => {
-				res
-					.status(500)
-					.json({ error: 'There was an error while saving the post to the database' });
-			});
-	}
-}
 
 module.exports = router;
